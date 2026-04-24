@@ -1,6 +1,6 @@
 const Login = () => {
   const handleLogin = () => {
-    window.location.href = "https://legendary-space-funicular-x5679vrrvx6x2pppj-3000.app.github.dev/auth/google";
+    window.location.href = "https://legendary-space-funicular-x5679vrrvx6x2pppj-3000.app.github.dev/api/auth/google";
   };
 
   return (

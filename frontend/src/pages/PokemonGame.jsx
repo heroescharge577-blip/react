@@ -11,35 +11,50 @@ const PokemonGame = ({ user }) => {
   const [resultado, setResultado] = useState(null);
 
   const obtenerPokemon = async () => {
-    setCargando(true);
-    setMensaje("");
-    setImagen("");
-    setIntento("");
-    setJuegoTerminado(false);
-    setResultado(null);
-    const res = await fetch("/api/pokemon/random");
-    const data = await res.json();
-    setPistas(data);
-    setCargando(false);
+    try {
+      setCargando(true);
+      setMensaje("");
+      setImagen("");
+      setIntento("");
+      setJuegoTerminado(false);
+      setResultado(null);
+
+      // Llamada al endpoint unificado en server.js
+      const res = await api.get("/pokemon/random");
+      setPistas(res.data);
+    } catch (error) {
+      console.error("Error al obtener pokemon:", error);
+      setMensaje("Error al conectar con el servidor.");
+    } finally {
+      setCargando(false);
+    }
   };
 
   const enviarIntento = async () => {
     if (!intento || !pistas) return;
-    const res = await fetch("/api/pokemon/guess", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ intento, nombreReal: pistas._nombre }),
-    });
-    const data = await res.json();
-    setMensaje(data.mensaje);
-    setResultado(data.resultado);
-    setJuegoTerminado(true);
-    const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/dream-world/${pistas.id}.svg`;
-    setImagen(imgUrl);
+
+    try {
+      const res = await api.post("/pokemon/guess", { 
+        intento, 
+        nombreReal: pistas._nombre 
+      });
+
+      setMensaje(res.data.mensaje);
+      setResultado(res.data.resultado);
+      setJuegoTerminado(true);
+
+      // Usamos el ID para mostrar la imagen real al finalizar
+      const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pistas.id}.png`;
+      setImagen(imgUrl);
+    } catch (error) {
+      console.error("Error al enviar intento:", error);
+      setMensaje("Error al procesar la respuesta.");
+    }
   };
 
   const handleLogout = () => {
-    window.location.href = "https://legendary-space-funicular-x5679vrrvx6x2pppj-3000.app.github.dev/auth/logout";
+    // ✅ CORRECCIÓN: Apuntando a la ruta con /api
+    window.location.href = "https://legendary-space-funicular-x5679vrrvx6x2pppj-3000.app.github.dev/api/auth/logout";
   };
 
   return (
@@ -72,7 +87,7 @@ const PokemonGame = ({ user }) => {
             />
           )}
           <span style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.7)" }}>
-            {user?.displayName}
+            {user?.displayName || "Entrenador"}
           </span>
           <button
             onClick={handleLogout}
@@ -91,30 +106,25 @@ const PokemonGame = ({ user }) => {
         </div>
       </div>
 
-      {/* Main */}
+      {/* Contenido Principal */}
       <div style={{ maxWidth: "700px", margin: "0 auto", textAlign: "center" }}>
         <button
           onClick={obtenerPokemon}
+          disabled={cargando}
           style={{
             padding: "14px 32px",
             background: "linear-gradient(135deg, #e63946, #c1121f)",
             color: "#fff",
             border: "none",
             borderRadius: "12px",
-            cursor: "pointer",
+            cursor: cargando ? "not-allowed" : "pointer",
             fontSize: "1rem",
             fontWeight: "700",
             marginBottom: "30px",
           }}
-          onMouseOver={(e) => e.currentTarget.style.opacity = "0.85"}
-          onMouseOut={(e) => e.currentTarget.style.opacity = "1"}
         >
-          {pistas ? "🔄 Nuevo Pokémon" : "⚡ ¡Iniciar Juego!"}
+          {cargando ? "Cargando..." : (pistas ? "🔄 Nuevo Pokémon" : "⚡ ¡Iniciar Juego!")}
         </button>
-
-        {cargando && (
-          <p style={{ color: "rgba(255,255,255,0.5)" }}>Cargando Pokémon...</p>
-        )}
 
         {pistas && !cargando && (
           <div style={{
@@ -130,13 +140,14 @@ const PokemonGame = ({ user }) => {
               🔍 Pistas
             </h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              {/* ✅ CORRECCIÓN: Aseguramos que use pistas.peso (como lo envía el servidor) */}
               {[
                 { label: "ID", value: `#${pistas.id}`, icon: "🆔" },
                 { label: "Tipo(s)", value: pistas.tipos.join(", "), icon: "🌀" },
                 { label: "Color", value: pistas.color, icon: "🎨" },
                 { label: "Altura", value: `${pistas.altura / 10} m`, icon: "📏" },
                 { label: "Peso", value: `${pistas.peso / 10} kg`, icon: "⚖️" },
-                { label: "Ataques", value: pistas.ataques.join(", "), icon: "⚔️" },
+                { label: "Ataques", value: pistas.ataques.slice(0, 3).join(", "), icon: "⚔️" },
               ].map(({ label, value, icon }) => (
                 <div key={label} style={{
                   background: "rgba(255,255,255,0.05)",
@@ -154,11 +165,11 @@ const PokemonGame = ({ user }) => {
           </div>
         )}
 
-        {pistas && !juegoTerminado && (
+        {pistas && !juegoTerminado && !cargando && (
           <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
             <input
               type="text"
-              placeholder="Nombre del Pokémon..."
+              placeholder="¿Quién es ese Pokémon?"
               value={intento}
               onChange={(e) => setIntento(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && enviarIntento()}
@@ -196,9 +207,7 @@ const PokemonGame = ({ user }) => {
             marginTop: "24px",
             padding: "24px",
             borderRadius: "20px",
-            background: resultado === "correcto"
-              ? "rgba(0, 200, 100, 0.1)"
-              : "rgba(230, 57, 70, 0.1)",
+            background: resultado === "correcto" ? "rgba(0, 200, 100, 0.1)" : "rgba(230, 57, 70, 0.1)",
             border: `1px solid ${resultado === "correcto" ? "rgba(0,200,100,0.3)" : "rgba(230,57,70,0.3)"}`,
           }}>
             <h2 style={{ margin: "0 0 16px 0" }}>{mensaje}</h2>
@@ -207,7 +216,6 @@ const PokemonGame = ({ user }) => {
                 src={imagen}
                 alt="Pokemon"
                 style={{ width: "160px", marginTop: "10px", filter: "drop-shadow(0 0 20px rgba(255,255,255,0.2))" }}
-                onError={(e) => { e.target.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pistas.id}.png`; }}
               />
             )}
           </div>
